@@ -257,6 +257,7 @@ export default function App() {
                   activeTab={activeTab} 
                   setActiveTab={setActiveTab} 
                   onLogout={handleLogout} 
+                  onToggleConsultant={() => setIsConsultantOpen(!isConsultantOpen)}
                   backendStatus={backendStatus}
                 />
               </motion.div>
@@ -366,9 +367,23 @@ export default function App() {
                     animate={{ x: 0, opacity: 1 }}
                     exit={{ x: 400, opacity: 0 }}
                     transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                    className="w-[400px] hidden lg:block"
+                    className="fixed inset-0 lg:relative lg:inset-auto lg:w-[400px] z-[60] lg:z-auto bg-white flex flex-col"
                   >
-                    <ClinicalConsultant userId={user.uid} />
+                    <div className="lg:hidden p-4 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+                      <div className="flex items-center gap-2 text-blue-600 font-bold text-xs uppercase tracking-widest">
+                        <Activity size={18} />
+                        Pulse AI
+                      </div>
+                      <button 
+                        onClick={() => setIsConsultantOpen(false)}
+                        className="p-2 hover:bg-slate-50 rounded-xl text-slate-500"
+                      >
+                        <X size={24} />
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <ClinicalConsultant userId={user.uid} />
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>

@@ -27,6 +27,7 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onLogout: () => void;
+  onToggleConsultant: () => void;
   backendStatus: 'online' | 'offline' | 'checking';
 }
 
@@ -37,6 +38,7 @@ const menuItems = [
   { id: 'files', label: "Patient's Files", icon: FolderOpen },
   { id: 'labs', label: 'Lab Registry', icon: FlaskConical },
   { id: 'intelligence', label: 'Intelligence Hub', icon: Brain },
+  { id: 'ai-consultant', label: 'AI Clinical Consultant', icon: ShieldCheck },
   { id: 'telehealth', label: 'Telehealth', icon: Video },
   { id: 'prescriptions', label: 'Prescriptions', icon: Pill },
   { id: 'pharmacy', label: 'Health Shop', icon: ShoppingBag },
@@ -48,7 +50,7 @@ const menuItems = [
   { id: 'system', label: 'System Status', icon: Settings },
 ];
 
-export default function Sidebar({ activeTab, setActiveTab, onLogout, backendStatus }: SidebarProps) {
+export default function Sidebar({ activeTab, setActiveTab, onLogout, onToggleConsultant, backendStatus }: SidebarProps) {
   return (
     <div className="w-72 h-screen bg-white border-r border-slate-100 flex flex-col p-6 sticky top-0">
       <div className="flex items-center gap-3 mb-12 px-2">
@@ -63,10 +65,18 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout, backendStat
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           
+          const handleClick = () => {
+            if (item.id === 'ai-consultant') {
+              onToggleConsultant();
+            } else {
+              setActiveTab(item.id);
+            }
+          };
+
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={handleClick}
               className={`w-full flex items-center justify-between p-3 rounded-xl transition-all group ${
                 isActive 
                 ? 'bg-blue-50 text-blue-600' 

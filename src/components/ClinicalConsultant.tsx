@@ -14,7 +14,8 @@ import {
   FileUp,
   BarChart3,
   Paperclip,
-  Trash2
+  Trash2,
+  Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI } from "@google/genai";
@@ -54,6 +55,7 @@ interface Message {
   timestamp: any; // Can be Date or Firestore Timestamp
   chartData?: any[];
   chartType?: 'bar' | 'line';
+  groundingHtml?: string;
 }
 
 interface ClinicalConsultantProps {
@@ -168,10 +170,33 @@ export default function ClinicalConsultant({ userId }: ClinicalConsultantProps) 
     setIsLoading(true);
 
     try {
-      const parts: any[] = [{ text: currentInput || "Please analyze this medical document and provide clinical insights." }];
-      
+      const history = messages.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }]
+      }));
+
+      const sysInstruction = `You are a highly specialized AI Clinical Consultant. 
+Your primary goals are:
+1. Clinical Accuracy: Provide information based on medical guidelines.
+2. Evidence-Based Reasoning: Cite studies where applicable.
+3. HIPAA Compliance: Never ask for PII.
+4. Document Analysis: If an image/document is provided, extract key values (e.g., lab results, vital signs).
+5. Data Visualization: If you find numerical trends or multiple data points (like blood pressure over time, or multiple lab values), include a JSON block at the end of your response in the following format:
+   \`\`\`json
+   {
+     "chartType": "bar" | "line",
+     "data": [
+       { "name": "Label", "value": 123 },
+       ...
+     ]
+   }
+   \`\`\`
+
+Structure your responses with clear headings. Always include a medical disclaimer.`;
+
+      const promptParts: any[] = [{ text: currentInput || "Please analyze this medical document and provide clinical insights." }];
       if (currentFile) {
-        parts.push({
+        promptParts.push({
           inlineData: {
             data: currentFile.data,
             mimeType: currentFile.mimeType
@@ -180,33 +205,17 @@ export default function ClinicalConsultant({ userId }: ClinicalConsultantProps) 
       }
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.1-pro-preview",
-        contents: { parts },
+        model: "gemini-2.0-flash",
+        contents: [...history, { role: 'user', parts: promptParts }],
         config: {
-          systemInstruction: `You are a highly specialized AI Clinical Consultant. 
-          Your primary goals are:
-          1. Clinical Accuracy: Provide information based on medical guidelines.
-          2. Evidence-Based Reasoning: Cite studies where applicable. Use Google Search to find the latest clinical trials and medical research.
-          3. HIPAA Compliance: Never ask for PII.
-          4. Document Analysis: If an image/document is provided, extract key values (e.g., lab results, vital signs).
-          5. Data Visualization: If you find numerical trends or multiple data points (like blood pressure over time, or multiple lab values), include a JSON block at the end of your response in the following format:
-             \`\`\`json
-             {
-               "chartType": "bar" | "line",
-               "data": [
-                 { "name": "Label", "value": 123 },
-                 ...
-               ]
-             }
-             \`\`\`
-          
-          Structure your responses with clear headings. Always include a medical disclaimer.`,
-          temperature: 0.1,
+          systemInstruction: sysInstruction,
           tools: [{ googleSearch: {} }]
         }
       });
 
       const text = response.text || "";
+      const groundingHtml = (response.candidates?.[0]?.groundingMetadata?.searchEntryPoint as any)?.html;
+      
       let chartData: any[] | undefined;
       let chartType: 'bar' | 'line' | undefined;
       let cleanContent = text;
@@ -229,7 +238,8 @@ export default function ClinicalConsultant({ userId }: ClinicalConsultantProps) 
         content: cleanContent || "I apologize, but I encountered an error processing your inquiry.",
         timestamp: new Date(),
         chartData,
-        chartType
+        chartType,
+        groundingHtml
       };
 
       const finalMessages = [...messages, userMessage, assistantMessage];
@@ -380,6 +390,19 @@ export default function ClinicalConsultant({ userId }: ClinicalConsultantProps) 
                             )}
                           </ResponsiveContainer>
                         </div>
+                      </div>
+                    )}
+
+                    {msg.groundingHtml && (
+                      <div className="mt-4 p-4 bg-white rounded-xl border border-blue-50 shadow-sm overflow-hidden text-xs">
+                        <div className="flex items-center gap-2 mb-3 text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                          <Search size={14} />
+                          Clinical Sources & Grounding
+                        </div>
+                        <div 
+                          className="grounding-search-entry-point text-slate-500 font-medium"
+                          dangerouslySetInnerHTML={{ __html: msg.groundingHtml }}
+                        />
                       </div>
                     )}
                   </div>

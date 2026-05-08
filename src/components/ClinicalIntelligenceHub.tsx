@@ -92,27 +92,16 @@ export default function ClinicalIntelligenceHub({ userId }: ClinicalIntelligence
     setIsAnalyzing(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const model = "gemini-3-flash-preview";
-
       const prompt = `
         Analyze the following patient data and provide a clinical intelligence report including predictive triage and wellness recommendations.
         
         Medical Records: ${JSON.stringify(records)}
         Wellness Metrics (Last 7 days): ${JSON.stringify(metrics)}
         Lab Results: ${JSON.stringify(labResults)}
-
-        Return the analysis in JSON format with the following structure:
-        {
-          "type": "triage" | "risk-assessment" | "wellness-plan",
-          "summary": "A brief summary of the findings",
-          "details": "Detailed clinical analysis",
-          "riskLevel": "low" | "moderate" | "high" | "urgent",
-          "recommendations": ["list", "of", "actions"]
-        }
       `;
 
       const response = await ai.models.generateContent({
-        model,
+        model: "gemini-2.0-flash",
         contents: prompt,
         config: { 
           responseMimeType: "application/json",
@@ -143,8 +132,6 @@ export default function ClinicalIntelligenceHub({ userId }: ClinicalIntelligence
     setIsServerAnalyzing(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const model = "gemini-3.1-pro-preview";
-
       const prompt = `
         You are a specialized Clinical AI assistant. Analyze the following patient data and provide a detailed clinical report.
         
@@ -152,24 +139,14 @@ export default function ClinicalIntelligenceHub({ userId }: ClinicalIntelligence
         Wellness Metrics: ${JSON.stringify(metrics.slice(0, 10))}
         Lab Results: ${JSON.stringify(labResults.slice(0, 5))}
 
-        Return the analysis in JSON format with the following structure:
-        {
-          "type": "triage" | "risk-assessment" | "wellness-plan",
-          "summary": "A brief summary of the findings",
-          "details": "Detailed clinical analysis",
-          "riskLevel": "low" | "moderate" | "high" | "urgent",
-          "recommendations": ["list", "of", "actions"]
-        }
-        
         Provide a professional, evidence-based analysis.
       `;
 
       const response = await ai.models.generateContent({
-        model,
+        model: "gemini-2.0-flash",
         contents: prompt,
         config: { 
           responseMimeType: "application/json",
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           tools: [{ googleSearch: {} }]
         }
       });

@@ -24,6 +24,22 @@
       },
       "required": ["patientId", "messages"]
     },
+    "Doctor": {
+      "title": "Doctor",
+      "description": "Medical professional profile information.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "specialty": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "availability": { "type": "string" },
+        "bio": { "type": "string" }
+      },
+      "required": ["name", "specialty", "email"]
+    },
     "UserProfile": {
       "title": "UserProfile",
       "description": "User profile information including role and medical history summary.",
@@ -297,9 +313,9 @@
       "schema": "Facility",
       "description": "Facility information."
     },
-    "/staff/{staffId}": {
-      "schema": "ClinicalStaff",
-      "description": "Clinical team members."
+    "/doctors/{doctorId}": {
+      "schema": "Doctor",
+      "description": "Medical professional profiles."
     },
     "/files/{fileId}": {
       "schema": "PatientFile",

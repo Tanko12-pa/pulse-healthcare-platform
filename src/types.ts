@@ -21,6 +21,8 @@ export interface Appointment {
   patientId: string;
   doctorId: string;
   doctorName: string;
+  doctorPhoto?: string;
+  doctorSpecialty?: string;
   date: any;
   type: 'telehealth' | 'in-person';
   status: 'scheduled' | 'completed' | 'cancelled';
@@ -93,6 +95,18 @@ export interface Facility {
   logoURL?: string;
   hours?: string;
   services?: string[];
+}
+
+export interface Doctor {
+  id: string;
+  name: string;
+  specialty: string;
+  email: string;
+  phone?: string;
+  photoURL?: string;
+  availability?: string;
+  bio?: string;
+  createdAt?: any;
 }
 
 export interface ClinicalStaff {

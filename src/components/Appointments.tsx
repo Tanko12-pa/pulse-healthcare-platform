@@ -9,7 +9,8 @@ import {
   CheckCircle2,
   ChevronRight,
   Search,
-  Filter
+  Filter,
+  Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -21,10 +22,11 @@ import {
   doc,
   updateDoc,
   serverTimestamp,
-  orderBy
+  orderBy,
+  getDocs
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Appointment } from '../types';
+import { Appointment, Doctor } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrorHandler';
 
 interface AppointmentsProps {
@@ -33,6 +35,7 @@ interface AppointmentsProps {
 
 export default function Appointments({ userId }: AppointmentsProps) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
@@ -40,6 +43,7 @@ export default function Appointments({ userId }: AppointmentsProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   // Form State
+  const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [doctorName, setDoctorName] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -68,14 +72,74 @@ export default function Appointments({ userId }: AppointmentsProps) {
     return () => unsubscribe();
   }, [userId]);
 
+  useEffect(() => {
+    // Fetch doctors
+    const doctorsQuery = query(collection(db, 'doctors'), orderBy('name', 'asc'));
+    const unsubscribe = onSnapshot(doctorsQuery, (snapshot) => {
+      setDoctors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Doctor)));
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'doctors'));
+
+    return () => unsubscribe();
+  }, []);
+
+  // Seed doctors if none exist
+  useEffect(() => {
+    const seedDoctors = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'doctors'));
+        if (snapshot.empty) {
+          const seedData = [
+            {
+              name: 'Dr. Sarah Miller',
+              specialty: 'Cardiology',
+              email: 's.miller@pulse.com',
+              photoURL: 'https://images.unsplash.com/photo-1559839734-2b71f153678f?auto=format&fit=crop&q=80&w=200&h=200',
+              bio: 'Board-certified cardiologist with over 15 years of experience in cardiovascular health.',
+              createdAt: serverTimestamp()
+            },
+            {
+              name: 'Dr. James Wilson',
+              specialty: 'Neurology',
+              email: 'j.wilson@pulse.com',
+              photoURL: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=200&h=200',
+              bio: 'Specialist in neurological disorders and cognitive health.',
+              createdAt: serverTimestamp()
+            },
+            {
+              name: 'Dr. Elena Rodriguez',
+              specialty: 'Pediatrics',
+              email: 'e.rodriguez@pulse.com',
+              photoURL: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?auto=format&fit=crop&q=80&w=200&h=200',
+              bio: 'Compassionate pediatrician dedicated to child development and preventive care.',
+              createdAt: serverTimestamp()
+            }
+          ];
+          
+          for (const doctor of seedData) {
+            await addDoc(collection(db, 'doctors'), doctor);
+          }
+        }
+      } catch (error) {
+        // Only report if it's not a permission error during initial load (if they aren't admin)
+        console.warn('Doctor seeding skipped or failed:', error);
+      }
+    };
+    seedDoctors();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedDoctorId) return;
+
     try {
+      const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
       const appointmentDate = new Date(`${date}T${time}`);
       const appointmentRef = await addDoc(collection(db, 'appointments'), {
         patientId: userId,
-        doctorId: 'doc-123', // Mock doctor ID for now
+        doctorId: selectedDoctorId,
         doctorName,
+        doctorPhoto: selectedDoctor?.photoURL || '',
+        doctorSpecialty: selectedDoctor?.specialty || '',
         date: appointmentDate,
         type,
         status: 'scheduled',
@@ -107,6 +171,7 @@ export default function Appointments({ userId }: AppointmentsProps) {
 
   const resetForm = () => {
     setDoctorName('');
+    setSelectedDoctorId('');
     setDate('');
     setTime('');
     setType('telehealth');
@@ -185,15 +250,28 @@ export default function Appointments({ userId }: AppointmentsProps) {
                   className="bg-white p-6 rounded-3xl border border-slate-50 shadow-sm flex items-center justify-between group hover:border-blue-100 transition-all"
                 >
                   <div className="flex items-center gap-4">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
-                      apt.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'
-                    }`}>
-                      {apt.type === 'telehealth' ? <Video size={28} /> : <MapPin size={28} />}
+                    <div className="relative">
+                      <div className="w-14 h-14 rounded-2xl overflow-hidden bg-slate-100 border-2 border-white shadow-sm">
+                        {apt.doctorPhoto ? (
+                          <img src={apt.doctorPhoto} alt={apt.doctorName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-slate-400">
+                            <Users size={24} />
+                          </div>
+                        )}
+                      </div>
+                      <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-lg flex items-center justify-center shadow-lg border-2 border-white text-xs ${
+                        apt.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'
+                      }`}>
+                        {apt.type === 'telehealth' ? <Video size={12} /> : <MapPin size={12} />}
+                      </div>
                     </div>
                     <div>
                       <h4 className="font-bold text-slate-900">{apt.doctorName}</h4>
                       <div className="flex items-center gap-2">
-                        <p className="text-sm text-slate-500 font-medium capitalize">{apt.type} • {apt.status}</p>
+                        <p className="text-xs text-blue-600 font-bold uppercase tracking-widest">{apt.doctorSpecialty || 'Physician'}</p>
+                        <span className="text-slate-300">•</span>
+                        <p className="text-xs text-slate-500 font-medium capitalize">{apt.status}</p>
                         {apt.reminderEnabled && (
                           <span className="flex items-center gap-1 text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold">
                             <Clock size={10} />
@@ -303,15 +381,53 @@ export default function Appointments({ userId }: AppointmentsProps) {
 
               <form onSubmit={handleSubmit} className="p-8 space-y-6">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Doctor Name</label>
-                  <input 
-                    required
-                    type="text"
-                    value={doctorName}
-                    onChange={(e) => setDoctorName(e.target.value)}
-                    placeholder="e.g. Dr. Sarah Miller"
-                    className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-600/20 transition-all"
-                  />
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Select Doctor</label>
+                  <div className="grid grid-cols-1 gap-3">
+                    {doctors.length === 0 ? (
+                      <div className="p-4 bg-slate-50 rounded-2xl text-slate-500 text-xs font-medium text-center">
+                        No doctors available at this time.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                        {doctors.map((doctor) => (
+                          <button
+                            key={doctor.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedDoctorId(doctor.id);
+                              setDoctorName(doctor.name);
+                            }}
+                            className={`flex items-center gap-3 p-3 rounded-2xl border-2 transition-all text-left ${
+                              selectedDoctorId === doctor.id 
+                                ? 'bg-blue-50 border-blue-600' 
+                                : 'bg-white border-slate-100 hover:border-slate-200'
+                            }`}
+                          >
+                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 shrink-0">
+                              {doctor.photoURL ? (
+                                <img src={doctor.photoURL} alt={doctor.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                  <Users size={20} />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-slate-900 text-sm truncate">{doctor.name}</p>
+                              <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest truncate">
+                                {doctor.specialty}
+                              </p>
+                            </div>
+                            {selectedDoctorId === doctor.id && (
+                              <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center text-white shrink-0">
+                                <CheckCircle2 size={12} />
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -474,12 +590,24 @@ export default function Appointments({ userId }: AppointmentsProps) {
               className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl overflow-hidden p-10 space-y-8"
             >
               <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-blue-600 font-bold text-[10px] uppercase tracking-widest">
-                    <CalendarIcon size={14} />
-                    Consultation Details
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-50 border-2 border-white shadow-lg shrink-0">
+                    {selectedAppointment.doctorPhoto ? (
+                      <img src={selectedAppointment.doctorPhoto} alt={selectedAppointment.doctorName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-300">
+                        <Users size={32} />
+                      </div>
+                    )}
                   </div>
-                  <h3 className="text-3xl font-black text-slate-900">{selectedAppointment.doctorName}</h3>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-blue-600 font-bold text-[10px] uppercase tracking-widest">
+                      <CalendarIcon size={14} />
+                      Consultation Details
+                    </div>
+                    <h3 className="text-3xl font-black text-slate-900">{selectedAppointment.doctorName}</h3>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">{selectedAppointment.doctorSpecialty || 'Physician'}</p>
+                  </div>
                 </div>
                 <button 
                   onClick={() => setSelectedAppointment(null)}

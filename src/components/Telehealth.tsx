@@ -56,12 +56,18 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [isRemoteMuted, setIsRemoteMuted] = useState(false);
+  const [isRemoteVideoOff, setIsRemoteVideoOff] = useState(false);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [availableCalls, setAvailableCalls] = useState<any[]>([]);
   const [callError, setCallError] = useState<string | null>(null);
+  const [micStatus, setMicStatus] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown');
+  const [cameraStatus, setCameraStatus] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown');
   const [isRecording, setIsRecording] = useState(false);
   const [recordings, setRecordings] = useState<any[]>([]);
   const [isWaiting, setIsWaiting] = useState(false);
+  const [callDuration, setCallDuration] = useState(0);
+  const [isJoining, setIsJoining] = useState(false);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -70,6 +76,27 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
   const remoteStream = useRef<MediaStream | null>(null);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const recordedChunks = useRef<Blob[]>([]);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (isJoined) {
+      timerRef.current = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+      setCallDuration(0);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isJoined]);
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   useEffect(() => {
     // Listen for available calls (for doctors)
@@ -106,20 +133,51 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
     };
   }, [userId, isAdmin]);
 
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!navigator.permissions || !navigator.permissions.query) {
+        return;
+      }
+
+      try {
+        const micPermission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        const camPermission = await navigator.permissions.query({ name: 'camera' as PermissionName });
+
+        setMicStatus(micPermission.state as any);
+        setCameraStatus(camPermission.state as any);
+
+        micPermission.onchange = () => setMicStatus(micPermission.state as any);
+        camPermission.onchange = () => setCameraStatus(camPermission.state as any);
+      } catch (error) {
+        console.error('Error checking permissions:', error);
+      }
+    };
+
+    checkPermissions();
+  }, []);
+
   const cleanup = () => {
     if (localStream.current) {
       localStream.current.getTracks().forEach(track => track.stop());
+      localStream.current = null;
     }
     if (pc.current) {
+      pc.current.ontrack = null;
+      pc.current.onicecandidate = null;
       pc.current.close();
+      pc.current = null;
     }
     setIsJoined(false);
     setIsWaiting(false);
+    setIsJoining(false);
     setActiveCallId(null);
     if (isRecording) stopRecording();
   };
 
   const setupPeerConnection = async () => {
+    if (pc.current) {
+      pc.current.close();
+    }
     pc.current = new RTCPeerConnection(servers);
     remoteStream.current = new MediaStream();
 
@@ -135,21 +193,44 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
         remoteVideoRef.current.srcObject = remoteStream.current;
       }
     };
+
+    pc.current.onconnectionstatechange = () => {
+      if (pc.current?.connectionState === 'disconnected' || pc.current?.connectionState === 'failed') {
+        cleanup();
+      }
+    };
   };
 
   const startLocalStream = async () => {
     try {
       setCallError(null);
-      localStream.current = await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
       });
+      localStream.current = stream;
+      setMicStatus('granted');
+      setCameraStatus('granted');
       if (localVideoRef.current) {
-        localVideoRef.current.srcObject = localStream.current;
+        localVideoRef.current.srcObject = stream;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error accessing media devices:', error);
-      setCallError('Could not access camera or microphone. Please check permissions.');
+      
+      let message = 'Could not access camera or microphone.';
+      
+      if (error.name === 'NotAllowedError' || error.message?.includes('Permission') || error.message?.includes('denied')) {
+        message = 'Camera or microphone access was denied or dismissed. Please click the camera icon in your browser address bar to reset permissions.';
+        setMicStatus('denied');
+        setCameraStatus('denied');
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        message = 'No camera or microphone found on your device.';
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        message = 'Camera or microphone is already in use by another application.';
+      }
+      
+      setCallError(message);
+      throw error;
     }
   };
 
@@ -194,6 +275,18 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
           setIsJoined(true);
           setIsWaiting(false);
         }
+        
+        // Remote stats
+        if (data) {
+          if (isAdmin) {
+            setIsRemoteMuted(!!data.patientMuted);
+            setIsRemoteVideoOff(!!data.patientVideoOff);
+          } else {
+            setIsRemoteMuted(!!data.doctorMuted);
+            setIsRemoteVideoOff(!!data.doctorVideoOff);
+          }
+        }
+
         if (data?.status === 'ended') {
           cleanup();
         }
@@ -210,18 +303,18 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
 
       if (!isAdmin) {
         setIsWaiting(true);
-      } else {
-        setIsJoined(true);
       }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'calls');
+    } catch (error: any) {
+      if (error.name !== 'NotAllowedError') {
+        handleFirestoreError(error, OperationType.WRITE, 'calls');
+      }
     } finally {
       setIsConnecting(false);
     }
   };
 
   const handleJoinCall = async (callId: string) => {
-    setIsConnecting(true);
+    setIsJoining(true);
     try {
       await startLocalStream();
       await setupPeerConnection();
@@ -264,17 +357,32 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
       });
 
       onSnapshot(callDoc, (snapshot) => {
-        if (snapshot.data()?.status === 'ended') {
+        const data = snapshot.data();
+        
+        // Remote stats
+        if (data) {
+          if (isAdmin) {
+            setIsRemoteMuted(!!data.patientMuted);
+            setIsRemoteVideoOff(!!data.patientVideoOff);
+          } else {
+            setIsRemoteMuted(!!data.doctorMuted);
+            setIsRemoteVideoOff(!!data.doctorVideoOff);
+          }
+        }
+
+        if (data?.status === 'ended') {
           cleanup();
         }
       });
 
       setActiveCallId(callId);
       setIsJoined(true);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'calls');
+    } catch (error: any) {
+      if (error.name !== 'NotAllowedError') {
+        handleFirestoreError(error, OperationType.WRITE, 'calls');
+      }
     } finally {
-      setIsConnecting(false);
+      setIsJoining(false);
     }
   };
 
@@ -285,21 +393,39 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
     cleanup();
   };
 
-  const toggleMute = () => {
-    if (localStream.current) {
+  const toggleMute = async () => {
+    if (localStream.current && activeCallId) {
+      const newMuted = !isMuted;
       localStream.current.getAudioTracks().forEach(track => {
-        track.enabled = !track.enabled;
+        track.enabled = !newMuted;
       });
-      setIsMuted(!isMuted);
+      setIsMuted(newMuted);
+      
+      try {
+        await updateDoc(doc(db, 'calls', activeCallId), {
+          [isAdmin ? 'doctorMuted' : 'patientMuted']: newMuted
+        });
+      } catch (error) {
+        console.error('Error updating mute state:', error);
+      }
     }
   };
 
-  const toggleVideo = () => {
-    if (localStream.current) {
+  const toggleVideo = async () => {
+    if (localStream.current && activeCallId) {
+      const newVideoOff = !isVideoOff;
       localStream.current.getVideoTracks().forEach(track => {
-        track.enabled = !track.enabled;
+        track.enabled = !newVideoOff;
       });
-      setIsVideoOff(!isVideoOff);
+      setIsVideoOff(newVideoOff);
+
+      try {
+        await updateDoc(doc(db, 'calls', activeCallId), {
+          [isAdmin ? 'doctorVideoOff' : 'patientVideoOff']: newVideoOff
+        });
+      } catch (error) {
+        console.error('Error updating video state:', error);
+      }
     }
   };
 
@@ -461,27 +587,41 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
                     ref={remoteVideoRef}
                     autoPlay 
                     playsInline 
-                    className="w-full h-full object-cover"
+                    className={`w-full h-full object-cover ${isRemoteVideoOff ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}
                   />
                   
-                  {!remoteVideoRef.current?.srcObject && (
+                  {(isRemoteVideoOff || !remoteVideoRef.current?.srcObject) && (
                     <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
                       <div className="text-center space-y-4">
-                        <div className="w-32 h-32 bg-blue-600/20 rounded-full flex items-center justify-center text-blue-500 mx-auto">
-                          <User size={64} />
+                        <div className="w-32 h-32 bg-blue-600/20 rounded-full flex items-center justify-center text-blue-500 mx-auto transition-transform duration-500 scale-110">
+                          {isRemoteVideoOff ? <VideoOff size={64} /> : <User size={64} />}
                         </div>
                         <p className="text-white font-bold text-xl">
-                          {isAdmin ? 'Waiting for Patient...' : 'Dr. Sarah Miller'}
+                          {isAdmin ? 'Awaiting Patient...' : 'Dr. Sarah Miller'}
+                          {isRemoteVideoOff && <span className="block text-sm text-slate-400 font-normal mt-1">Video Paused</span>}
                         </p>
-                        <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full border border-emerald-500/30">
-                          Live • Connected
-                        </span>
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full border border-emerald-500/30">
+                              Live • Connected
+                            </span>
+                            {isRemoteMuted && (
+                              <span className="px-3 py-1 bg-red-500/20 text-red-400 text-xs font-bold rounded-full border border-red-500/30 flex items-center gap-1">
+                                <MicOff size={10} />
+                                Muted
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-white/60 font-mono text-sm tabular-nums">
+                            {formatDuration(callDuration)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )}
 
                   {/* Self View */}
-                  <div className="absolute top-8 right-8 w-48 aspect-video bg-slate-700 rounded-2xl border-2 border-white/20 shadow-2xl overflow-hidden">
+                  <div className="absolute top-8 right-8 w-48 aspect-video bg-slate-700 rounded-2xl border-2 border-white/20 shadow-2xl overflow-hidden group/self">
                     <video 
                       ref={localVideoRef}
                       autoPlay 
@@ -494,7 +634,7 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
                         <VideoOff size={32} />
                       </div>
                     )}
-                    <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/40 backdrop-blur-md rounded text-[10px] text-white font-bold">
+                    <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/40 backdrop-blur-md rounded text-[10px] text-white font-bold opacity-0 group-hover/self:opacity-100 transition-opacity">
                       You
                     </div>
                   </div>
@@ -587,9 +727,10 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
                       </div>
                       <button 
                         onClick={() => handleJoinCall(call.id)}
-                        className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all"
+                        disabled={isJoining}
+                        className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                       >
-                        <PhoneCall size={20} />
+                        {isJoining ? <Loader2 size={20} className="animate-spin" /> : <PhoneCall size={20} />}
                       </button>
                     </div>
                   ))
@@ -615,11 +756,23 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-600 font-medium">Microphone</span>
-                    <span className="text-emerald-500 font-bold">Connected</span>
+                    <span className={`font-bold ${
+                      micStatus === 'granted' ? 'text-emerald-500' : 
+                      micStatus === 'denied' ? 'text-red-500' : 'text-slate-400'
+                    }`}>
+                      {micStatus === 'granted' ? 'Connected' : 
+                       micStatus === 'denied' ? 'Blocked' : 'Awaiting Access'}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-600 font-medium">Camera</span>
-                    <span className="text-emerald-500 font-bold">Connected</span>
+                    <span className={`font-bold ${
+                      cameraStatus === 'granted' ? 'text-emerald-500' : 
+                      cameraStatus === 'denied' ? 'text-red-500' : 'text-slate-400'
+                    }`}>
+                      {cameraStatus === 'granted' ? 'Connected' : 
+                       cameraStatus === 'denied' ? 'Blocked' : 'Awaiting Access'}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-600 font-medium">Internet Speed</span>
