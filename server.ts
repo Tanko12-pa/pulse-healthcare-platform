@@ -61,8 +61,6 @@ function setupFirestoreListeners() {
               priceId,
               planType,
               isTrial,
-              successUrl: `${process.env.APP_URL || 'https://pulse-healthcare-platform-882980549076.us-west1.run.app'}/success?status=success`,
-              cancelUrl: `${process.env.APP_URL || 'https://pulse-healthcare-platform-882980549076.us-west1.run.app'}/cancel?status=cancel`,
             });
 
             await docRef.update({
@@ -241,8 +239,6 @@ async function startServer() {
         priceId,
         planType,
         isTrial: !!isTrial,
-        successUrl: `${process.env.APP_URL || 'https://pulse-healthcare-platform-882980549076.us-west1.run.app'}/success?status=success`,
-        cancelUrl: `${process.env.APP_URL || 'https://pulse-healthcare-platform-882980549076.us-west1.run.app'}/cancel?status=cancel`,
       });
 
       res.json({ url: session.url });
@@ -368,8 +364,6 @@ async function startServer() {
         priceId,
         planType: plan as 'monthly' | 'yearly',
         isTrial: !!isTrial,
-        successUrl: `${process.env.APP_URL || 'https://pulse-healthcare-platform-882980549076.us-west1.run.app'}/success?status=success`,
-        cancelUrl: `${process.env.APP_URL || 'https://pulse-healthcare-platform-882980549076.us-west1.run.app'}/cancel?status=cancel`,
       });
 
       res.json({ url: session.url });

@@ -19,8 +19,6 @@ export async function createCheckoutSession(params: {
   priceId: string;
   planType: 'monthly' | 'yearly';
   isTrial: boolean;
-  successUrl: string;
-  cancelUrl: string;
 }) {
   const stripe = getStripe();
 
@@ -32,8 +30,8 @@ export async function createCheckoutSession(params: {
       quantity: 1,
     }],
     mode: 'subscription',
-    success_url: params.successUrl,
-    cancel_url: params.cancelUrl,
+    success_url: `${process.env.APP_URL || 'https://pulse-healthcare-platform-882980549076.us-west1.run.app'}/success`,
+    cancel_url: `${process.env.APP_URL || 'https://pulse-healthcare-platform-882980549076.us-west1.run.app'}/cancel`,
     // Essential for multi-user/real-time sync implemented earlier
     customer_email: params.userEmail,
     client_reference_id: params.userId,
