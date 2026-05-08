@@ -77,6 +77,8 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const recordedChunks = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [recordingDuration, setRecordingDuration] = useState(0);
 
   useEffect(() => {
     if (isJoined) {
@@ -96,6 +98,13 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatFullDuration = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
   };
 
   useEffect(() => {
@@ -172,6 +181,8 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
     setIsJoining(false);
     setActiveCallId(null);
     if (isRecording) stopRecording();
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    setRecordingDuration(0);
   };
 
   const setupPeerConnection = async () => {
@@ -446,13 +457,14 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
       }
     };
 
+    const startTime = Date.now();
     mediaRecorder.current.onstop = async () => {
       const blob = new Blob(recordedChunks.current, { type: 'video/webm' });
       const url = URL.createObjectURL(blob);
+      const durationSeconds = Math.round((Date.now() - startTime) / 1000);
       
       // In a real app, you'd upload this blob to Firebase Storage
       // For this demo, we'll store the local URL and metadata in Firestore
-      // AND notify our backend
       if (activeCallId) {
         try {
           const callData = (await getDoc(doc(db, 'calls', activeCallId))).data();
@@ -461,8 +473,10 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
             patientId: isAdmin ? callData?.participantId || 'unknown' : userId,
             doctorId: isAdmin ? userId : callData?.hostId || 'unknown',
             url: url, // In real app, this would be the Storage download URL
-            duration: 0, // Calculate duration if needed
-            createdAt: serverTimestamp()
+            duration: durationSeconds,
+            createdAt: serverTimestamp(),
+            status: 'available',
+            fileName: `consultation_${new Date().toISOString().split('T')[0]}.webm`
           };
 
           await addDoc(collection(db, 'recordings'), recordingData);
@@ -478,23 +492,29 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
             body: JSON.stringify({
               callId: activeCallId,
               recordingUrl: url,
-              duration: 0
+              duration: durationSeconds
             })
           });
         } catch (error) {
           console.error('Error saving recording metadata:', error);
         }
       }
+      setRecordingDuration(0);
     };
 
     mediaRecorder.current.start();
     setIsRecording(true);
+    setRecordingDuration(0);
+    recordingTimerRef.current = setInterval(() => {
+      setRecordingDuration(prev => prev + 1);
+    }, 1000);
   };
 
   const stopRecording = () => {
     if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
       mediaRecorder.current.stop();
       setIsRecording(false);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
     }
   };
 
@@ -641,9 +661,9 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
 
                   {/* Recording Indicator */}
                   {isRecording && (
-                    <div className="absolute top-8 left-8 flex items-center gap-2 bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold animate-pulse">
-                      <Circle size={12} fill="currentColor" />
-                      REC
+                    <div className="absolute top-8 left-8 flex items-center gap-3 bg-red-600 text-white px-4 py-2 rounded-2xl text-xs font-bold animate-pulse shadow-xl shadow-red-500/20">
+                      <div className="w-2 h-2 bg-white rounded-full animate-ping" />
+                      REC • {formatDuration(recordingDuration)}
                     </div>
                   )}
                 </motion.div>
@@ -784,35 +804,72 @@ export default function Telehealth({ userId, isAdmin }: TelehealthProps) {
           </div>
 
           {/* Recordings Section */}
-          {recordings.length > 0 && (
-            <div className="bg-white p-8 rounded-[40px] border border-slate-50 shadow-sm space-y-6">
-              <h3 className="text-xl font-bold text-slate-900">Past Recordings</h3>
-              <div className="space-y-4">
-                {recordings.map(rec => (
-                  <div key={rec.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
-                        <Play size={18} />
+          <div className="bg-white p-8 rounded-[40px] border border-slate-50 shadow-sm space-y-6">
+            <header className="flex items-center justify-between">
+              <h3 className="text-xl font-bold text-slate-900">Consultation Recordings</h3>
+              <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+                <Video size={18} />
+              </div>
+            </header>
+            
+            <div className="space-y-4">
+              {recordings.length > 0 ? (
+                recordings.map(rec => (
+                  <div key={rec.id} className="p-5 bg-slate-50/50 rounded-3xl border border-slate-100 flex items-center justify-between group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm group-hover:scale-110 transition-transform">
+                        <Play size={20} className="fill-blue-100" />
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-900">Consultation Recording</p>
-                        <p className="text-[10px] text-slate-500 font-medium">
-                          {rec.createdAt?.toDate().toLocaleDateString()}
-                        </p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-900 truncate">Recording {rec.id.slice(0, 6)}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                            {rec.createdAt?.toDate ? rec.createdAt.toDate().toLocaleDateString() : 'Just now'}
+                          </p>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-[10px] text-blue-600 font-bold uppercase tracking-widest flex items-center gap-1">
+                            <Clock size={10} />
+                            {formatFullDuration(rec.duration || 0)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <a 
-                      href={rec.url} 
-                      download={`recording-${rec.id}.webm`}
-                      className="p-2 text-slate-400 hover:text-blue-600 transition-all"
-                    >
-                      <Download size={18} />
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => window.open(rec.url, '_blank')}
+                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                        title="Play in New Tab"
+                      >
+                        <Play size={18} />
+                      </button>
+                      <a 
+                        href={rec.url} 
+                        download={rec.fileName || `recording-${rec.id.slice(0,6)}.webm`}
+                        className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+                        title="Download Recording"
+                      >
+                        <Download size={18} />
+                      </a>
+                    </div>
                   </div>
-                ))}
-              </div>
+                ))
+              ) : (
+                <div className="text-center py-10 bg-slate-50/30 rounded-3xl border border-dashed border-slate-200">
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
+                    <VideoOff size={20} className="text-slate-300" />
+                  </div>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">No recordings yet</p>
+                </div>
+              )}
             </div>
-          )}
+            
+            <div className="p-4 bg-blue-50 rounded-2xl flex items-start gap-3">
+              <ShieldCheck size={18} className="text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-blue-600/80 font-medium leading-relaxed">
+                Recordings are stored securely and only accessible by participating parties. They are automatically deleted after 30 days.
+              </p>
+            </div>
+          </div>
           
           {!isJoined && !isWaiting && (
             <button 

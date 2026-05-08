@@ -63,7 +63,17 @@ service cloud.firestore {
              data.status in ['scheduled', 'completed', 'cancelled'] &&
              (!('notes' in data) || (data.notes is string && data.notes.size() < 5000)) &&
              (!('reminderEnabled' in data) || data.reminderEnabled is bool) &&
-             (!('reminderTime' in data) || data.reminderTime is number);
+             (!('reminderTime' in data) || data.reminderTime is number) &&
+             (!('location' in data) || (data.location is string && data.location.size() < 500)) &&
+             (!('duration' in data) || data.duration is number);
+    }
+
+    function isValidReminderSchema(data) {
+      return data.keys().hasAll(['appointmentId', 'patientId', 'type', 'scheduledTime', 'status', 'createdAt']) &&
+             data.appointmentId is string && data.patientId is string &&
+             data.type in ['email', 'push', 'sms'] &&
+             data.scheduledTime is timestamp &&
+             data.status in ['pending', 'sent', 'failed'];
     }
 
     function isValidMedicalRecordSchema(data) {
@@ -305,7 +315,9 @@ service cloud.firestore {
     match /reminders/{id} {
       allow get: if isValidId(id) && isAuthenticated() && (userId() == resource.data.patientId || isAdmin());
       allow list: if isAuthenticated() && (userId() == resource.data.patientId || isAdmin());
-      allow write: if isValidId(id) && (isAdmin() || (isAuthenticated() && incoming().patientId == userId()));
+      allow create: if isValidId(id) && isAuthenticated() && incoming().patientId == userId() && isValidReminderSchema(incoming());
+      allow update: if isValidId(id) && (isAdmin() || (isAuthenticated() && userId() == resource.data.patientId && isValidReminderSchema(incoming())));
+      allow delete: if isValidId(id) && isAdmin();
     }
     match /refills/{id} {
       allow get: if isValidId(id) && isAuthenticated() && (userId() == resource.data.patientId || isAdmin());

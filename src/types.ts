@@ -29,6 +29,8 @@ export interface Appointment {
   notes?: string;
   reminderEnabled?: boolean;
   reminderTime?: number;
+  location?: string;
+  duration?: number; // duration in minutes
 }
 
 export interface AppointmentReminder {
