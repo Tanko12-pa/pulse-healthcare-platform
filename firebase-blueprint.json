@@ -1,0 +1,349 @@
+{
+  "entities": {
+    "Consultation": {
+      "title": "Consultation",
+      "description": "A chat session with the AI Clinical Consultant.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": { "type": "string", "enum": ["user", "assistant"] },
+              "content": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" },
+              "chartData": { "type": "array" },
+              "chartType": { "type": "string", "enum": ["bar", "line"] }
+            }
+          }
+        },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "messages"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information including role and medical history summary.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["patient", "doctor", "admin"] },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "trialStartDate": { "type": "string", "format": "date-time" },
+        "subscriptionStatus": { "type": "string", "enum": ["trialing", "active", "expired", "none"] },
+        "planType": { "type": "string", "enum": ["monthly", "yearly"] },
+        "isPremium": { "type": "boolean" },
+        "stripeCustomerId": { "type": "string" },
+        "lastPaymentDate": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Medical appointment details.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "doctorId": { "type": "string" },
+        "doctorName": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["telehealth", "in-person"] },
+        "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled"] },
+        "notes": { "type": "string" },
+        "reminderEnabled": { "type": "boolean" },
+        "reminderTime": { "type": "number", "description": "Minutes before appointment" }
+      },
+      "required": ["patientId", "doctorId", "date", "type", "status"]
+    },
+    "AppointmentReminder": {
+      "title": "AppointmentReminder",
+      "description": "Notification settings for appointments.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "appointmentId": { "type": "string" },
+        "patientId": { "type": "string" },
+        "type": { "type": "string", "enum": ["email", "push", "sms"] },
+        "scheduledTime": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "sent", "failed"] }
+      },
+      "required": ["appointmentId", "patientId", "type", "scheduledTime", "status"]
+    },
+    "MedicalRecord": {
+      "title": "MedicalRecord",
+      "description": "Patient medical record entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "type": { "type": "string", "enum": ["diagnosis", "lab-result", "immunization", "surgery"] },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "diagnosisStatus": { "type": "string", "enum": ["Active", "Resolved", "Chronic"] },
+        "attachments": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["patientId", "type", "title", "date"]
+    },
+    "Prescription": {
+      "title": "Prescription",
+      "description": "Medication prescription details.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "medication": { "type": "string" },
+        "dosage": { "type": "string" },
+        "frequency": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["active", "expired", "discontinued"] },
+        "refillsRemaining": { "type": "number" },
+        "lastRefillDate": { "type": "string", "format": "date" },
+        "notes": { "type": "string" }
+      },
+      "required": ["patientId", "medication", "dosage", "status"]
+    },
+    "MedicationRefill": {
+      "title": "MedicationRefill",
+      "description": "Requests for medication refills.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "prescriptionId": { "type": "string" },
+        "patientId": { "type": "string" },
+        "requestDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "approved", "denied", "ready"] },
+        "notes": { "type": "string" }
+      },
+      "required": ["prescriptionId", "patientId", "requestDate", "status"]
+    },
+    "Call": {
+      "title": "Call",
+      "description": "WebRTC signaling data for telehealth calls.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "hostId": { "type": "string" },
+        "participantId": { "type": "string" },
+        "offer": { "type": "object" },
+        "answer": { "type": "object" },
+        "status": { "type": "string", "enum": ["pending", "active", "ended", "waiting"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "recordingUrl": { "type": "string" }
+      },
+      "required": ["hostId", "status", "createdAt"]
+    },
+    "CallRecording": {
+      "title": "CallRecording",
+      "description": "Recorded video call data.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "callId": { "type": "string" },
+        "patientId": { "type": "string" },
+        "doctorId": { "type": "string" },
+        "url": { "type": "string" },
+        "duration": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["callId", "patientId", "doctorId", "url", "createdAt"]
+    },
+    "WellnessMetric": {
+      "title": "WellnessMetric",
+      "description": "Daily wellness tracking data.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "steps": { "type": "number" },
+        "heartRate": { "type": "number" },
+        "sleepHours": { "type": "number" },
+        "weight": { "type": "number" }
+      },
+      "required": ["patientId", "date"]
+    },
+    "Facility": {
+      "title": "Facility",
+      "description": "Healthcare facility information.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "hours": { "type": "string" },
+        "services": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["name", "address", "phone"]
+    },
+    "ClinicalStaff": {
+      "title": "ClinicalStaff",
+      "description": "Information about clinical team members.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["physician", "pharmacist", "nurse"] },
+        "specialty": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "availability": { "type": "string" },
+        "bio": { "type": "string" }
+      },
+      "required": ["name", "role", "email"]
+    },
+    "PatientFile": {
+      "title": "PatientFile",
+      "description": "General files and documents for patients.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "type": { "type": "string" },
+        "size": { "type": "number" },
+        "uploadedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "name", "url", "uploadedAt"]
+    },
+    "LabResult": {
+      "title": "LabResult",
+      "description": "Verified laboratory test results.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "testName": { "type": "string" },
+        "category": { "type": "string" },
+        "value": { "type": "string" },
+        "unit": { "type": "string" },
+        "referenceRange": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "flag-risk", "verified-ok"] },
+        "labName": { "type": "string" },
+        "verifiedBy": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "isVerified": { "type": "boolean" }
+      },
+      "required": ["patientId", "testName", "value", "status", "date", "isVerified"]
+    },
+    "ClinicalInsight": {
+      "title": "ClinicalInsight",
+      "description": "AI-generated clinical intelligence and predictive triage.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "type": { "type": "string", "enum": ["triage", "risk-assessment", "wellness-plan"] },
+        "summary": { "type": "string" },
+        "details": { "type": "string" },
+        "riskLevel": { "type": "string", "enum": ["low", "moderate", "high", "urgent"] },
+        "recommendations": { "type": "array", "items": { "type": "string" } },
+        "generatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "type", "summary", "riskLevel", "generatedAt"]
+    },
+    "ClinicProfile": {
+      "title": "ClinicProfile",
+      "description": "User's preferred clinic or pharmacy profile.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "clinicName": { "type": "string" },
+        "clinicAddress": { "type": "string" },
+        "clinicPhone": { "type": "string" },
+        "clinicEmail": { "type": "string" },
+        "preferredPharmacist": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "clinicName", "clinicAddress", "clinicPhone"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "User profiles."
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Medical appointments."
+    },
+    "/records/{recordId}": {
+      "schema": "MedicalRecord",
+      "description": "Medical records."
+    },
+    "/prescriptions/{prescriptionId}": {
+      "schema": "Prescription",
+      "description": "Prescriptions."
+    },
+    "/wellness/{metricId}": {
+      "schema": "WellnessMetric",
+      "description": "Wellness metrics."
+    },
+    "/facilities/{facilityId}": {
+      "schema": "Facility",
+      "description": "Facility information."
+    },
+    "/staff/{staffId}": {
+      "schema": "ClinicalStaff",
+      "description": "Clinical team members."
+    },
+    "/files/{fileId}": {
+      "schema": "PatientFile",
+      "description": "General patient files."
+    },
+    "/lab_results/{resultId}": {
+      "schema": "LabResult",
+      "description": "Verified lab results."
+    },
+    "/insights/{insightId}": {
+      "schema": "ClinicalInsight",
+      "description": "AI clinical insights."
+    },
+    "/reminders/{reminderId}": {
+      "schema": "AppointmentReminder",
+      "description": "Appointment reminders."
+    },
+    "/refills/{refillId}": {
+      "schema": "MedicationRefill",
+      "description": "Medication refill requests."
+    },
+    "/calls/{callId}": {
+      "schema": "Call",
+      "description": "WebRTC signaling calls."
+    },
+    "/recordings/{recordingId}": {
+      "schema": "CallRecording",
+      "description": "Recorded telehealth calls."
+    },
+    "/clinicProfiles/{uid}": {
+      "schema": "ClinicProfile",
+      "description": "User's preferred clinic profile."
+    },
+    "/consultations/{consultationId}": {
+      "schema": "Consultation",
+      "description": "AI Clinical Consultant chat sessions."
+    },
+    "/customers/{uid}/checkout_sessions/{sessionId}": {
+      "schema": "object",
+      "description": "Stripe Checkout Sessions created by the Stripe Firebase Extension."
+    },
+    "/customers/{uid}/subscriptions/{subscriptionId}": {
+      "schema": "object",
+      "description": "Stripe Subscriptions managed by the Stripe Firebase Extension."
+    }
+  }
+}

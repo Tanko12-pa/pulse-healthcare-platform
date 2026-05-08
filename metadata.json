@@ -1,0 +1,5 @@
+{
+  "name": "Pulse Healthcare Platform",
+  "description": "A premium, AI-powered healthcare management platform featuring a sleek command hub for patient records, appointments, telehealth, and wellness tracking.",
+  "requestFramePermissions": ["camera", "microphone", "geolocation"]
+}

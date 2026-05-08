@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Geist+Sans:wght@100..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-background: #F0F4F8; /* 60% Dominant (Calm Blue) */
+  --color-secondary: #4A5568;  /* 30% Secondary (Slate Gray) */
+  --color-accent: #2D3748;     /* 10% Accent (Healing Teal) */
+  --color-surface: #FFFFFF;
+  
+  --font-sans: "Geist Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-secondary font-sans antialiased;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply min-h-[48px] px-6 py-2 bg-accent text-white rounded-xl font-bold shadow-md hover:opacity-90 transition-all active:scale-[0.98] flex items-center justify-center gap-2;
+  }
+  
+  .btn-secondary {
+    @apply min-h-[48px] px-6 py-2 bg-white border-2 border-accent text-accent rounded-xl font-bold hover:bg-background transition-all active:scale-[0.98] flex items-center justify-center gap-2;
+  }
+
+  .card {
+    @apply bg-surface rounded-3xl p-6 shadow-sm border border-background;
+  }
+}
+
